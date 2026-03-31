@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>統計學教室：理解「相關性」</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="site.css">
+    <style>
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 700px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 50vh;
+            min-height: 400px;
+            max-height: 500px;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(226, 232, 240, 0.8);
+        }
+        input[type=range] {
+            accent-color: #4f46e5;
+        }
+        .pulse-animation {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
+        .manual-active {
+            border: 2px solid #4f46e5;
+            cursor: crosshair !important;
+        }
+    </style>
+</head>
+<body class="site-body">
+    <!-- Chosen Palette: Slate and Indigo. 使用洗練的石板灰作為主色調，配以靛藍色作為互動焦點，營造沉穩且專注的學術氛圍。 -->
+    <!-- Application Structure Plan: 採用「實驗室」架構。上方為標題與概念介紹。左側為控制面板，提供「自動生成」與「手動點擊」兩種模式切換，並提供 CSV 匯出功能。右側為視覺化座標軸，新增線性回歸趨勢線顯示。下方為統計即時分析，包含回歸方程式。這種結構讓使用者能直觀理解相關係數與線性趨勢之間的數學連結。 -->
+    <!-- Visualization & Content Choices: 原始數據 -> 變數關係 -> 散佈圖 (Chart.js Scatter) -> 最小平方法回歸線 (Line Dataset) -> 即時計算 Pearson r 與 y=ax+b。確認無使用 SVG/Mermaid。 -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+
+    <header class="site-banner">
+        <div class="site-banner-inner">
+            <a href="index.html" class="site-title">統計學互動學習</a>
+            <p class="site-tagline">瀏覽器內即時運算，無需安裝軟體。</p>
+        </div>
+    </header>
+
+    <div class="site-main">
+    <div class="max-w-6xl mx-auto">
+        <nav class="breadcrumb-nav" aria-label="麵包屑">
+            <ol>
+                <li><a href="index.html">首頁</a></li>
+                <li class="breadcrumb-sep" aria-hidden="true">/</li>
+                <li class="text-slate-800 font-medium" aria-current="page">相關性與線性回歸</li>
+            </ol>
+        </nav>
+        <!-- 標題與簡介 -->
+        <header class="text-center mb-10">
+            <h1 class="text-3xl md:text-4xl font-bold text-slate-800 mb-4">統計學互動教室：探索「相關性」</h1>
+            <p class="text-slate-600 max-w-3xl mx-auto leading-relaxed">
+                相關性（Correlation）描述了變數間的關聯，而<b>線性回歸（Linear Regression）</b>則試圖找出最能代表資料趨勢的那條線。
+            </p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
+            <!-- 控制面板 -->
+            <aside class="lg:col-span-1 space-y-6">
+                <!-- 自動模擬區 -->
+                <section id="autoControls" class="glass-panel p-6 rounded-2xl shadow-sm border-t-4 border-indigo-500 transition-all">
+                    <h2 class="text-lg font-bold mb-4 text-slate-700 border-b pb-2">模式 1：自動生成</h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-500 mb-1">資料筆數 ($n$)</label>
+                            <input type="number" id="inputN" value="50" min="5" max="500" 
+                                class="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none">
+                        </div>
+                        <div>
+                            <div class="flex justify-between items-center mb-2">
+                                <label class="text-sm font-medium text-slate-500">目標相關係數 ($r$)</label>
+                                <span id="targetRVal" class="text-sm font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">0.00</span>
+                            </div>
+                            <input type="range" id="inputR" min="-1" max="1" step="0.01" value="0" 
+                                class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"
+                                oninput="document.getElementById('targetRVal').textContent = parseFloat(this.value).toFixed(2)">
+                        </div>
+                        <button onclick="generateData()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl transition-all shadow-md">
+                            產生模擬資料
+                        </button>
+                    </div>
+                </section>
+
+                <!-- 手動輸入與管理區 -->
+                <section class="glass-panel p-6 rounded-2xl shadow-sm border-t-4 border-emerald-500">
+                    <h2 class="text-lg font-bold mb-4 text-slate-700 border-b pb-2">模式 2：資料管理</h2>
+                    <div class="space-y-3">
+                        <button id="btnStartManual" onclick="toggleManualMode(true)" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2">
+                            <span>開始手動點擊</span>
+                        </button>
+                        <button id="btnStopManual" onclick="toggleManualMode(false)" class="hidden w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-3 rounded-xl transition-all">
+                            完成資料輸入
+                        </button>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button onclick="clearData()" class="w-full border border-slate-200 text-slate-500 hover:bg-slate-50 font-medium py-2 rounded-xl transition-all text-sm">
+                                清除資料
+                            </button>
+                            <button onclick="exportToCSV()" class="w-full bg-slate-100 border border-slate-200 text-slate-700 hover:bg-slate-200 font-bold py-2 rounded-xl transition-all text-sm flex items-center justify-center gap-1">
+                                <span>匯出 CSV</span>
+                            </button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 操作提示 -->
+                <div id="manualHint" class="hidden p-4 bg-emerald-50 border border-emerald-100 rounded-2xl pulse-animation">
+                    <h3 class="text-sm font-bold text-emerald-800 mb-1">手動輸入中...</h3>
+                    <p class="text-[11px] text-emerald-700">請直接點擊右側座標軸內的任何位置來新增資料點。</p>
+                </div>
+            </aside>
+
+            <!-- 圖表與分析區 -->
+            <main class="lg:col-span-3 flex flex-col gap-6">
+                <div id="chartWrapper" class="glass-panel p-6 rounded-2xl shadow-sm transition-all">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold text-slate-800">散佈圖與回歸線 (0-100 範圍)</h2>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs text-slate-400">樣本數: <span id="sampleSize">0</span> | 相關係數:</span>
+                            <div id="resultBadge" class="px-4 py-1 rounded-full text-sm font-mono font-bold bg-indigo-600 text-white">
+                                r = 0.00
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="chart-container">
+                        <canvas id="scatterChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- 統計解釋區 -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="glass-panel p-6 rounded-2xl">
+                        <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3">數據統計摘要</h3>
+                        <div class="space-y-3">
+                            <div class="flex justify-between border-b border-slate-50 pb-1">
+                                <span class="text-slate-600 text-sm">平均值 $\bar{X}$ / $\bar{Y}$</span>
+                                <span class="font-mono font-bold text-indigo-600">
+                                    <span id="statMeanX">-</span> / <span id="statMeanY">-</span>
+                                </span>
+                            </div>
+                            <div class="flex justify-between border-b border-slate-50 pb-1">
+                                <span class="text-slate-600 text-sm">回歸方程式</span>
+                                <span id="statEquation" class="font-mono font-bold text-emerald-600">等待資料...</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-600 text-sm">相關程度判定</span>
+                                <span id="statInterpret" class="font-bold text-slate-800">等待資料...</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="glass-panel p-6 rounded-2xl bg-slate-800 text-slate-200">
+                        <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">Pearson 相關係數尺規</h3>
+                        <div class="mt-4 flex flex-col gap-2">
+                            <div id="rVisual" class="h-3 flex-grow bg-slate-700 rounded-full overflow-hidden relative border border-slate-600">
+                                <div id="rIndicator" class="absolute h-full bg-indigo-400 transition-all duration-500 shadow-[0_0_8px_rgba(129,140,248,0.5)]" style="width: 0%; left: 50%;"></div>
+                                <div class="absolute left-1/2 top-0 bottom-0 w-px bg-slate-500"></div>
+                            </div>
+                            <div class="flex justify-between text-[10px] font-mono text-slate-500">
+                                <span>-1.0</span>
+                                <span>0</span>
+                                <span>+1.0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+    </div>
+
+    <footer class="site-footer">
+        <div class="site-footer-inner">
+            可直接以瀏覽器開啟本頁與各工具之 HTML 檔案；若日後以靜態網站伺服器提供，連結方式相同。
+        </div>
+    </footer>
+
+    <script>
+        let chartInstance = null;
+        let currentData = [];
+        let isManualMode = false;
+
+        function randomNormal() {
+            let u = 0, v = 0;
+            while (u === 0) u = Math.random(); 
+            while (v === 0) v = Math.random();
+            return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+        }
+
+        function initChart() {
+            const ctx = document.getElementById('scatterChart').getContext('2d');
+            chartInstance = new Chart(ctx, {
+                type: 'scatter',
+                data: {
+                    datasets: [
+                        {
+                            label: '觀察樣本',
+                            data: [],
+                            backgroundColor: 'rgba(79, 70, 229, 0.6)',
+                            borderColor: 'rgb(79, 70, 229)',
+                            borderWidth: 1,
+                            pointRadius: 6,
+                            pointHoverRadius: 8,
+                            order: 2
+                        },
+                        {
+                            label: '回歸直線',
+                            data: [],
+                            type: 'line',
+                            borderColor: 'rgba(16, 185, 129, 0.8)',
+                            borderWidth: 3,
+                            borderDash: [5, 5],
+                            pointRadius: 0,
+                            fill: false,
+                            order: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    onClick: (e) => {
+                        if (!isManualMode) return;
+                        const canvasPosition = Chart.helpers.getRelativePosition(e, chartInstance);
+                        const x = chartInstance.scales.x.getValueForPixel(canvasPosition.x);
+                        const y = chartInstance.scales.y.getValueForPixel(canvasPosition.y);
+                        if (x >= 0 && x <= 100 && y >= 0 && y <= 100) {
+                            currentData.push({ x, y });
+                            updateUI();
+                        }
+                    },
+                    scales: {
+                        x: { type: 'linear', min: 0, max: 100, title: { display: true, text: '變數 X', font: { weight: 'bold' } }, grid: { color: '#f1f5f9' } },
+                        y: { min: 0, max: 100, title: { display: true, text: '變數 Y', font: { weight: 'bold' } }, grid: { color: '#f1f5f9' } }
+                    },
+                    plugins: {
+                        legend: { 
+                            display: true,
+                            labels: {
+                                filter: (item) => item.text !== '回歸直線' || currentData.length >= 2
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => {
+                                    if (context.datasetIndex === 0) {
+                                        return `樣本: (X: ${context.parsed.x.toFixed(1)}, Y: ${context.parsed.y.toFixed(1)})`;
+                                    }
+                                    return null;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function toggleManualMode(active) {
+            isManualMode = active;
+            const chartWrapper = document.getElementById('chartWrapper');
+            const autoControls = document.getElementById('autoControls');
+            const btnStart = document.getElementById('btnStartManual');
+            const btnStop = document.getElementById('btnStopManual');
+            const hint = document.getElementById('manualHint');
+
+            if (active) {
+                chartWrapper.classList.add('manual-active');
+                autoControls.style.opacity = '0.4';
+                autoControls.style.pointerEvents = 'none';
+                btnStart.classList.add('hidden');
+                btnStop.classList.remove('hidden');
+                hint.classList.remove('hidden');
+            } else {
+                chartWrapper.classList.remove('manual-active');
+                autoControls.style.opacity = '1';
+                autoControls.style.pointerEvents = 'auto';
+                btnStart.classList.remove('hidden');
+                btnStop.classList.add('hidden');
+                hint.classList.add('hidden');
+            }
+        }
+
+        function clearData() {
+            currentData = [];
+            updateUI();
+        }
+
+        function exportToCSV() {
+            if (currentData.length === 0) return alert("目前沒有可匯出的資料！");
+            let csvRows = ["X,Y"];
+            currentData.forEach(point => csvRows.push(`${point.x.toFixed(4)},${point.y.toFixed(4)}`));
+            const csvString = "\uFEFF" + csvRows.join("\n");
+            const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            link.setAttribute("download", `correlation_data_${new Date().getTime()}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // 計算 Pearson 相關係數
+        function calculatePearson(data) {
+            const n = data.length;
+            if (n < 2) return 0;
+            const x = data.map(d => d.x);
+            const y = data.map(d => d.y);
+            const sumX = x.reduce((a, b) => a + b, 0);
+            const sumY = y.reduce((a, b) => a + b, 0);
+            const sumXY = x.reduce((a, b, i) => a + b * y[i], 0);
+            const sumX2 = x.reduce((a, b) => a + b * b, 0);
+            const sumY2 = y.reduce((a, b) => a + b * b, 0);
+            const numerator = (n * sumXY) - (sumX * sumY);
+            const denominator = Math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
+            return denominator === 0 ? 0 : numerator / denominator;
+        }
+
+        // 計算線性回歸 (OLS)
+        function calculateRegression(data) {
+            const n = data.length;
+            if (n < 2) return null;
+            const x = data.map(d => d.x);
+            const y = data.map(d => d.y);
+            const sumX = x.reduce((a, b) => a + b, 0);
+            const sumY = y.reduce((a, b) => a + b, 0);
+            const sumXY = x.reduce((a, b, i) => a + b * y[i], 0);
+            const sumX2 = x.reduce((a, b) => a + b * b, 0);
+            
+            const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+            const intercept = (sumY - slope * sumX) / n;
+            
+            return { slope, intercept };
+        }
+
+        function generateData() {
+            toggleManualMode(false);
+            const n = parseInt(document.getElementById('inputN').value) || 50;
+            const targetR = parseFloat(document.getElementById('inputR').value);
+            const newData = [];
+            for (let i = 0; i < n; i++) {
+                const zx = randomNormal();
+                const ze = randomNormal();
+                const zy = targetR * zx + Math.sqrt(1 - targetR * targetR) * ze;
+                let x = ((zx + 3) / 6) * 100;
+                let y = ((zy + 3) / 6) * 100;
+                x = Math.max(0, Math.min(100, x));
+                y = Math.max(0, Math.min(100, y));
+                newData.push({ x, y });
+            }
+            currentData = newData;
+            updateUI();
+        }
+
+        function updateUI() {
+            const n = currentData.length;
+            document.getElementById('sampleSize').textContent = n;
+            const r = calculatePearson(currentData);
+            const reg = calculateRegression(currentData);
+            
+            const meanX = n > 0 ? (currentData.reduce((a, b) => a + b.x, 0) / n) : 0;
+            const meanY = n > 0 ? (currentData.reduce((a, b) => a + b.y, 0) / n) : 0;
+
+            // 更新散佈點
+            chartInstance.data.datasets[0].data = currentData;
+
+            // 更新回歸線
+            if (reg && !isNaN(reg.slope)) {
+                chartInstance.data.datasets[1].data = [
+                    { x: 0, y: reg.intercept },
+                    { x: 100, y: reg.slope * 100 + reg.intercept }
+                ];
+                const sign = reg.intercept >= 0 ? '+' : '';
+                document.getElementById('statEquation').textContent = `y = ${reg.slope.toFixed(2)}x ${sign}${reg.intercept.toFixed(2)}`;
+            } else {
+                chartInstance.data.datasets[1].data = [];
+                document.getElementById('statEquation').textContent = n < 2 ? '等待更多點...' : '計算中...';
+            }
+
+            chartInstance.update(n > 100 ? 'none' : 'default');
+
+            // 更新 UI 元件
+            document.getElementById('resultBadge').textContent = `r = ${r.toFixed(3)}`;
+            document.getElementById('statMeanX').textContent = n > 0 ? meanX.toFixed(1) : '-';
+            document.getElementById('statMeanY').textContent = n > 0 ? meanY.toFixed(1) : '-';
+
+            const indicator = document.getElementById('rIndicator');
+            const absR = Math.abs(r);
+            const width = absR * 50;
+            if (r >= 0) {
+                indicator.style.left = '50%';
+                indicator.style.width = `${width}%`;
+                indicator.style.backgroundColor = '#818cf8';
+            } else {
+                indicator.style.left = `${50 - width}%`;
+                indicator.style.width = `${width}%`;
+                indicator.style.backgroundColor = '#fb7185';
+            }
+
+            let interpret = "等待資料...";
+            if (n >= 2) {
+                if (absR < 0.1) interpret = "幾乎無線性相關";
+                else if (absR < 0.3) interpret = "極弱相關";
+                else if (absR < 0.7) interpret = r > 0 ? "顯著正相關" : "顯著負相關";
+                else interpret = r > 0 ? "強烈正相關" : "強烈負相關";
+            }
+            const interpretEl = document.getElementById('statInterpret');
+            interpretEl.textContent = interpret;
+            interpretEl.className = `font-bold ${absR > 0.7 ? 'text-indigo-600' : 'text-slate-800'}`;
+        }
+
+        window.onload = () => {
+            initChart();
+            generateData();
+        };
+    </script>
+</body>
+</html>

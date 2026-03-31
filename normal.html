@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>常態分佈 Z 分數與百分比轉換器</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="site.css">
+    <style>
+        .glass-card {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(226, 232, 240, 0.8);
+        }
+        #normalChart {
+            cursor: crosshair;
+        }
+    </style>
+</head>
+<body class="site-body">
+
+    <header class="site-banner">
+        <div class="site-banner-inner">
+            <a href="index.html" class="site-title">統計學互動學習</a>
+            <p class="site-tagline">瀏覽器內即時運算，無需安裝軟體。</p>
+        </div>
+    </header>
+
+    <div class="site-main">
+    <div class="max-w-4xl mx-auto">
+        <nav class="breadcrumb-nav" aria-label="麵包屑">
+            <ol>
+                <li><a href="index.html">首頁</a></li>
+                <li class="breadcrumb-sep" aria-hidden="true">/</li>
+                <li class="text-slate-800 font-medium" aria-current="page">Z 分數與累積百分比</li>
+            </ol>
+        </nav>
+        <!-- 標題區 -->
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-slate-800 mb-2">常態分佈轉換工具</h1>
+            <p class="text-slate-500">輸入數值、點擊圖表或使用「鍵盤方向鍵」進行微調</p>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- 輸入控制區 -->
+            <div class="lg:col-span-1 flex flex-col gap-6">
+                <div class="glass-card p-6 rounded-2xl shadow-sm">
+                    <h2 class="text-lg font-semibold mb-4 text-slate-700 flex items-center">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>轉換計算</h2>
+                    
+                    <!-- Z 分數輸入 -->
+                    <div class="mb-5">
+                        <label class="block text-sm font-medium text-slate-600 mb-1">Z 分數 (Z-score)</label>
+                        <input type="number" id="zInput" step="0.01" value="0" 
+                            class="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                            placeholder="例如: 1.96">
+                        <button onclick="calculateFromZ()" class="mt-2 w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 rounded-xl transition-colors shadow-sm">
+                            Z 轉百分比 ↓
+                        </button>
+                    </div>
+
+                    <!-- 百分比輸入 -->
+                    <div class="mb-2">
+                        <label class="block text-sm font-medium text-slate-600 mb-1">累積百分比 (%)</label>
+                        <input type="number" id="pInput" step="0.1" min="0" max="100" value="50"
+                            class="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all"
+                            placeholder="0 - 100">
+                        <button onclick="calculateFromP()" class="mt-2 w-full bg-green-600 hover:bg-green-700 text-white font-medium py-2 rounded-xl transition-colors shadow-sm">
+                            百分比 轉 Z ↑
+                        </button>
+                    </div>
+
+                    <div id="statusMessage" class="mt-4 text-sm text-center hidden p-2 rounded-lg"></div>
+                </div>
+
+                <!-- 互動說明 -->
+                <div class="glass-card p-6 rounded-2xl shadow-sm bg-indigo-50/50 border-indigo-100">
+                    <h3 class="text-sm font-bold text-indigo-800 mb-3 text-center uppercase tracking-wider">操作快捷鍵</h3>
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between text-xs p-2 bg-white rounded-lg border border-indigo-100">
+                            <span class="text-slate-600 font-medium">鍵盤 ← 向左鍵</span>
+                            <span class="text-rose-600 font-bold">Z - 0.01</span>
+                        </div>
+                        <div class="flex items-center justify-between text-xs p-2 bg-white rounded-lg border border-indigo-100">
+                            <span class="text-slate-600 font-medium">鍵盤 → 向右鍵</span>
+                            <span class="text-emerald-600 font-bold">Z + 0.01</span>
+                        </div>
+                        <div class="flex items-center justify-between text-xs p-2 bg-white rounded-lg border border-indigo-100">
+                            <span class="text-slate-600 font-medium">滑鼠直接點擊</span>
+                            <span class="text-indigo-600 font-bold">快速跳轉位置</span>
+                        </div>
+                    </div>
+                    <p class="text-[10px] text-slate-400 mt-4 text-center">提示：點擊網頁任何地方即可開始使用鍵盤控制</p>
+                </div>
+            </div>
+
+            <!-- 圖表顯示區 -->
+            <div class="lg:col-span-2 glass-card p-6 rounded-2xl shadow-sm min-h-[450px] flex flex-col">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-lg font-semibold text-slate-700">標準常態分佈曲線 (μ=0, σ=1)</h2>
+                    <span id="displayValues" class="text-sm font-mono text-blue-600 bg-blue-50 px-4 py-1.5 rounded-full border border-blue-100">
+                        Z: 0.00 | P: 50.00%
+                    </span>
+                </div>
+                <div class="flex-grow relative h-full">
+                    <canvas id="normalChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div>
+
+    <footer class="site-footer">
+        <div class="site-footer-inner">
+            可直接以瀏覽器開啟本頁與各工具之 HTML 檔案；若日後以靜態網站伺服器提供，連結方式相同。
+        </div>
+    </footer>
+
+    <script>
+        let chart;
+        const ctx = document.getElementById('normalChart').getContext('2d');
+
+        // --- 數學核心函數 ---
+
+        function pdf(x) {
+            return (1 / Math.sqrt(2 * Math.PI)) * Math.exp(-0.5 * x * x);
+        }
+
+        function GetZPercent(z) {
+            if (z < -8) return 0;
+            if (z > 8) return 1;
+            let t = 1 / (1 + 0.2316419 * Math.abs(z));
+            let d = 0.3989423 * Math.exp(-z * z / 2);
+            let p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.7814779 + t * (-1.821256 + t * 1.330274))));
+            if (z > 0) p = 1 - p;
+            return p;
+        }
+
+        function GetZFromPercent(p) {
+            if (p <= 0.000001) return -4.5;
+            if (p >= 0.999999) return 4.5;
+            let low = -5, high = 5, z = 0;
+            for(let i=0; i<20; i++) {
+                z = (low + high) / 2;
+                if (GetZPercent(z) < p) low = z;
+                else high = z;
+            }
+            return z;
+        }
+
+        // --- 界面邏輯 ---
+
+        function showMessage(msg, isError = false) {
+            const el = document.getElementById('statusMessage');
+            el.textContent = msg;
+            el.className = `mt-4 text-sm text-center p-2 rounded-lg ${isError ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`;
+            el.classList.remove('hidden');
+            setTimeout(() => el.classList.add('hidden'), 3000);
+        }
+
+        function calculateFromZ() {
+            const z = parseFloat(document.getElementById('zInput').value);
+            if (isNaN(z)) return showMessage("請輸入有效的 Z 分數", true);
+            const p = GetZPercent(z) * 100;
+            document.getElementById('pInput').value = p.toFixed(2);
+            updateVisuals(z, p);
+        }
+
+        function calculateFromP() {
+            let p = parseFloat(document.getElementById('pInput').value);
+            if (isNaN(p) || p < 0 || p > 100) return showMessage("請輸入 0 到 100 之間的百分比", true);
+            const z = GetZFromPercent(p / 100);
+            document.getElementById('zInput').value = z.toFixed(3);
+            updateVisuals(z, p);
+        }
+
+        // --- 繪圖邏輯 ---
+
+        function generateCurvePoints() {
+            const points = [];
+            for (let x = -4; x <= 4; x += 0.05) {
+                points.push({ x: parseFloat(x.toFixed(2)), y: pdf(x) });
+            }
+            return points;
+        }
+
+        function updateVisuals(z, p) {
+            z = Math.max(-4, Math.min(4, z));
+            document.getElementById('displayValues').textContent = `Z: ${z.toFixed(2)} | P: ${p.toFixed(2)}%`;
+            
+            const fullPoints = generateCurvePoints();
+            const filledPoints = fullPoints.filter(pt => pt.x <= z);
+            if (z >= -4 && z <= 4) {
+                filledPoints.push({ x: z, y: pdf(z) });
+            }
+
+            chart.data.datasets[1].data = filledPoints;
+            chart.data.datasets[2].data = [{ x: z, y: pdf(z) }];
+
+            chart.update('none');
+        }
+
+        function initChart() {
+            const fullPoints = generateCurvePoints();
+            
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    datasets: [
+                        {
+                            label: '常態分佈曲線',
+                            data: fullPoints,
+                            borderColor: '#94a3b8',
+                            borderWidth: 2,
+                            pointRadius: 0,
+                            fill: false,
+                            tension: 0.2
+                        },
+                        {
+                            label: '累積百分比',
+                            data: [],
+                            backgroundColor: 'rgba(59, 130, 246, 0.25)',
+                            borderColor: 'transparent',
+                            pointRadius: 0,
+                            fill: true,
+                            tension: 0.2
+                        },
+                        {
+                            label: '目前位置',
+                            data: [],
+                            borderColor: '#f43f5e',
+                            backgroundColor: '#f43f5e',
+                            pointRadius: 7,
+                            pointHoverRadius: 9,
+                            showLine: false,
+                            borderWidth: 3,
+                            borderColor: '#fff'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    onClick: (e) => {
+                        const canvasPosition = Chart.helpers.getRelativePosition(e, chart);
+                        const dataX = chart.scales.x.getValueForPixel(canvasPosition.x);
+                        const z = Math.max(-4, Math.min(4, dataX));
+                        const p = GetZPercent(z) * 100;
+                        document.getElementById('zInput').value = z.toFixed(3);
+                        document.getElementById('pInput').value = p.toFixed(2);
+                        updateVisuals(z, p);
+                    },
+                    scales: {
+                        x: {
+                            type: 'linear',
+                            min: -4,
+                            max: 4,
+                            title: { display: true, text: 'Z 分數 (可使用鍵盤 ← → 鍵微調)', font: { size: 12, weight: 'bold' } },
+                            grid: { color: '#f1f5f9' }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            display: false,
+                            max: 0.45
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { enabled: false }
+                    }
+                }
+            });
+
+            // --- 新增鍵盤監聽器 ---
+            window.addEventListener('keydown', (e) => {
+                // 檢查是否正在輸入框中，若是則不觸發快捷鍵（避免干擾正常打字）
+                if (e.target.tagName === 'INPUT') return;
+
+                let currentZ = parseFloat(document.getElementById('zInput').value) || 0;
+                let newZ = currentZ;
+
+                if (e.key === 'ArrowLeft') {
+                    newZ -= 0.01;
+                    e.preventDefault(); // 避免頁面捲動
+                } else if (e.key === 'ArrowRight') {
+                    newZ += 0.01;
+                    e.preventDefault(); // 避免頁面捲動
+                } else {
+                    return;
+                }
+
+                newZ = Math.max(-4, Math.min(4, newZ));
+                const p = GetZPercent(newZ) * 100;
+
+                // 更新同步
+                document.getElementById('zInput').value = newZ.toFixed(3);
+                document.getElementById('pInput').value = p.toFixed(2);
+                updateVisuals(newZ, p);
+            });
+            
+            updateVisuals(0, 50);
+        }
+
+        window.onload = initChart;
+    </script>
+</body>
+</html>
