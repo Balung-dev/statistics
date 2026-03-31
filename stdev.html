@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>標準差計算互動圖解</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="site.css">
+    <style>
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 40vh;
+            min-height: 350px;
+            max-height: 450px;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(8px);
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+        }
+        .step-active {
+            background-color: #3b82f6;
+            color: white;
+            border-color: #3b82f6;
+        }
+        .step-inactive {
+            background-color: #f1f5f9;
+            color: #64748b;
+            border-color: #cbd5e1;
+        }
+        .transition-all {
+            transition-property: all;
+            transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+            transition-duration: 300ms;
+        }
+    </style>
+</head>
+<body class="site-body text-slate-900">
+    <!-- Chosen Palette: Slate and soft blue tones (bg-slate-50, text-slate-800, blue-600 for highlights) for an educational, clean, and calm harmony. -->
+    <!-- Application Structure Plan: A single-page interactive step-by-step tutorial layout. It features a central interactive chart that updates based on the current step, paired with a dynamic text/table panel explaining the mathematical transformations. This structure chunk-ifies the complex formula into an intuitive narrative flow, directly addressing the goal of user understanding based on the report's content. -->
+    <!-- Visualization & Content Choices: Source: Dataset & Formula -> Goal: Inform & Change -> Viz: Bar Chart with dynamic threshold lines (Chart.js) + Interactive Progress Steps -> Justification: Allows users to visually see the "distance from mean" concept which is the core of variance, much more effective than static equations. -> Library: Chart.js (NO SVG/Mermaid used). -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+
+    <header class="site-banner">
+        <div class="site-banner-inner">
+            <a href="index.html" class="site-title">統計學互動學習</a>
+            <p class="site-tagline m-0">瀏覽器內即時運算，無需安裝軟體。</p>
+        </div>
+    </header>
+
+    <div class="site-main">
+    <div class="max-w-5xl mx-auto flex flex-col gap-6">
+        <nav class="breadcrumb-nav" aria-label="麵包屑">
+            <ol>
+                <li><a href="index.html">首頁</a></li>
+                <li class="breadcrumb-sep" aria-hidden="true">/</li>
+                <li class="text-slate-800 font-medium" aria-current="page">標準差計算互動圖解</li>
+            </ol>
+        </nav>
+
+        <header class="text-center mb-4">
+            <h1 class="text-3xl md:text-4xl font-bold text-slate-800 mb-3">標準差計算互動圖解</h1>
+            <p id="introText" class="text-slate-500 max-w-2xl mx-auto">本應用程式將帶您逐步拆解數據集的標準差計算過程。預設資料為 {30, 40, 50, 60, 70, 80, 90}，您亦可手動輸入資料。透過互動式視覺化，深入理解變異數與標準差的幾何意義。</p>
+            <div class="flex flex-wrap justify-center gap-3 mt-5">
+                <button type="button" id="btnManualInput" class="px-5 py-2.5 rounded-xl border-2 border-violet-400 bg-violet-50 text-violet-900 font-semibold text-sm hover:bg-violet-100 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 transition-colors shadow-sm">
+                    手動輸入資料
+                </button>
+            </div>
+        </header>
+
+        <div id="manualInputPanel" class="hidden max-w-lg mx-auto w-full glass-panel rounded-xl p-5 border-2 border-violet-200 shadow-sm mb-2" role="region" aria-labelledby="manualInputHeading">
+            <h2 id="manualInputHeading" class="text-base font-bold text-slate-800 mb-2">輸入新數據</h2>
+            <p class="text-xs text-slate-500 mb-3">將清空目前圖表與步驟展示，請重新輸入至少兩個數字（可含小數或負數）。</p>
+            <label for="manualDataInput" class="sr-only">數值列表</label>
+            <textarea id="manualDataInput" rows="5" class="w-full border border-slate-200 rounded-lg p-3 font-mono text-sm text-slate-800 focus:ring-2 focus:ring-violet-500 focus:border-violet-400 outline-none resize-y" placeholder="例如：&#10;10, 20, 30&#10;或每行一筆"></textarea>
+            <p id="manualInputError" class="text-red-600 text-sm mt-2 hidden" role="alert"></p>
+            <div class="flex flex-wrap gap-2 mt-4 justify-end">
+                <button type="button" id="btnManualCancel" class="px-4 py-2 rounded-lg bg-slate-100 text-slate-700 font-medium hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-400">取消</button>
+                <button type="button" id="btnManualApply" class="px-4 py-2 rounded-lg bg-violet-600 text-white font-semibold hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2">完成並套用</button>
+            </div>
+        </div>
+
+        <div class="flex flex-wrap justify-center gap-2 mb-2" id="stepIndicators">
+        </div>
+
+        <div class="glass-panel rounded-2xl p-6 md:p-8 flex flex-col gap-6">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-4">
+                <h2 id="stepTitle" class="text-2xl font-bold text-blue-700">準備數據</h2>
+                <div class="flex gap-2">
+                    <button id="btnPrev" class="px-4 py-2 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 font-medium transition-all">&larr; 上一步</button>
+                    <button id="btnNext" class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 font-medium transition-all shadow-sm shadow-blue-200">下一步 &rarr;</button>
+                </div>
+            </div>
+
+            <p id="stepDescription" class="text-slate-700 text-lg leading-relaxed min-h-[4rem]"></p>
+
+            <div class="chart-container bg-white rounded-xl border border-slate-50 p-2">
+                <canvas id="mathChart"></canvas>
+            </div>
+
+            <div class="mt-4 overflow-x-auto">
+                <table class="w-full text-left border-collapse" id="dataTable">
+                    <thead>
+                        <tr class="bg-slate-50 text-slate-600 text-sm uppercase tracking-wider border-b border-slate-200" id="tableHeader">
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody" class="text-slate-700 divide-y divide-slate-100">
+                    </tbody>
+                    <tfoot id="tableFoot" class="bg-blue-50/50 font-bold text-blue-800 hidden">
+                    </tfoot>
+                </table>
+            </div>
+            
+            <div id="conclusionBox" class="hidden mt-4 bg-green-50 border border-green-200 rounded-xl p-6 text-green-800">
+                <h3 class="text-lg font-bold mb-2 text-green-900">&#10004; 最終結論</h3>
+                <p id="conclusionMeanStd"></p>
+                <p id="conclusionRange" class="mt-1"></p>
+            </div>
+        </div>
+    </div>
+    </div>
+
+    <footer class="site-footer">
+        <div class="site-footer-inner">
+            可直接以瀏覽器開啟本頁與各工具之 HTML 檔案；若日後以靜態網站伺服器提供，連結方式相同。
+        </div>
+    </footer>
+
+    <script>
+        const DEFAULT_DATA = [30, 40, 50, 60, 70, 80, 90];
+
+        let rawData = [...DEFAULT_DATA];
+        let currentStats = null;
+        let stepsData = [];
+        let currentStep = 0;
+        let chartInstance = null;
+
+        function formatNum(x) {
+            if (!Number.isFinite(x)) return '—';
+            const rounded = Number(x.toPrecision(12));
+            if (Number.isInteger(rounded) && Math.abs(rounded) < 1e12) return String(rounded);
+            const t = parseFloat(x.toFixed(6));
+            return String(t);
+        }
+
+        function computeStats(data) {
+            const n = data.length;
+            const sum = data.reduce((a, b) => a + b, 0);
+            const mean = n > 0 ? sum / n : 0;
+            let sumSqDev = 0;
+            data.forEach((x) => {
+                const d = x - mean;
+                sumSqDev += d * d;
+            });
+            const variance = n > 0 ? sumSqDev / n : 0;
+            const stdDev = Math.sqrt(Math.max(0, variance));
+            return { n, sum, mean, sumSqDev, variance, stdDev };
+        }
+
+        function getStepsData(s) {
+            const m = formatNum(s.mean);
+            const bracket = '{' + s.rawData.map(formatNum).join(', ') + '}';
+            const colDev = `與平均值的距離 (x &minus; ${m})`;
+            const colSq = `距離的平方 ((x &minus; ${m})&sup2;)`;
+            return [
+                {
+                    title: '初始狀態：檢視原始數據',
+                    desc: `我們有一組包含 ${s.n} 個數值的數據集：${bracket}。首先，我們將它們繪製在圖表上，觀察數據的分布狀態。`,
+                    chartConfig: {
+                        showMean: false,
+                        showDeviations: false,
+                        showStdDevBand: false,
+                        barColor: 'rgba(99, 102, 241, 0.7)'
+                    },
+                    tableCols: ['原始數據 (x)'],
+                    showTotals: false
+                },
+                {
+                    title: '步驟 1：計算平均值 (Mean, &mu;)',
+                    desc: `將所有數字相加並除以總數 (n=${s.n})。總和為 ${formatNum(s.sum)}，因此平均值 &mu; = ${formatNum(s.sum)} / ${s.n} = ${m}。圖表上的紅線即代表這組數據的中心點。`,
+                    chartConfig: {
+                        showMean: true,
+                        showDeviations: false,
+                        showStdDevBand: false,
+                        barColor: 'rgba(99, 102, 241, 0.7)'
+                    },
+                    tableCols: ['原始數據 (x)'],
+                    showTotals: false
+                },
+                {
+                    title: '步驟 2：計算離差 (x &minus; &mu;)',
+                    desc: '計算每個數據點與平均值的距離（離差）。若數值小於平均值，距離為負；大於平均值則為正。這反映了每個數據點偏離中心的程度。注意所有離差的總和必定為 0。',
+                    chartConfig: {
+                        showMean: true,
+                        showDeviations: true,
+                        showStdDevBand: false,
+                        barColor: 'rgba(203, 213, 225, 0.6)'
+                    },
+                    tableCols: ['原始數據 (x)', colDev],
+                    showTotals: true
+                },
+                {
+                    title: '步驟 3：計算離差平方與變異數 (&sigma;&sup2;)',
+                    desc: `為了解決正負抵銷的問題，我們將每個離差「平方」。加總所有平方值得到 ${formatNum(s.sumSqDev)}。將其除以數據個數 ${s.n}，得到「變異數」&sigma;&sup2; = ${formatNum(s.variance)}。變異數是離差平方的平均值。`,
+                    chartConfig: {
+                        showMean: true,
+                        showDeviations: true,
+                        showStdDevBand: false,
+                        barColor: 'rgba(203, 213, 225, 0.6)'
+                    },
+                    tableCols: ['原始數據 (x)', colDev, colSq],
+                    showTotals: true
+                },
+                {
+                    title: '步驟 4：計算標準差 (&sigma;)',
+                    desc: `變異數的單位被平方放大了，為了回到原始數據的單位，我們將變異數開根號。標準差 &sigma; = &radic;${formatNum(s.variance)} = ${formatNum(s.stdDev)}。圖表中的藍色帶狀區域顯示了平均值加減一個標準差 (${formatNum(s.mean - s.stdDev)} ~ ${formatNum(s.mean + s.stdDev)}) 的範圍。`,
+                    chartConfig: {
+                        showMean: true,
+                        showDeviations: false,
+                        showStdDevBand: true,
+                        barColor: 'rgba(99, 102, 241, 0.9)'
+                    },
+                    tableCols: ['原始數據 (x)', colDev, colSq],
+                    showTotals: true
+                }
+            ];
+        }
+
+        function refreshStatsAndSteps() {
+            currentStats = computeStats(rawData);
+            currentStats.rawData = rawData;
+            stepsData = getStepsData(currentStats);
+        }
+
+        function updateIntroText() {
+            const bracket = '{' + rawData.map(formatNum).join(', ') + '}';
+            const el = document.getElementById('introText');
+            el.textContent = `本應用程式將帶您逐步拆解數據集的標準差計算過程。目前資料為 ${bracket}（預設為 {30, 40, 50, 60, 70, 80, 90}）。您也可按「手動輸入資料」更換數據。透過互動式視覺化，深入理解變異數與標準差的幾何意義。`;
+        }
+
+        function parseManualInput(str) {
+            const parts = String(str).split(/[\s,，、;；\n\r]+/).map((s) => s.trim()).filter(Boolean);
+            const nums = [];
+            for (const p of parts) {
+                const v = Number(p);
+                if (!Number.isFinite(v)) {
+                    return { error: `無法解析為數字：「${p}」` };
+                }
+                nums.push(v);
+            }
+            if (nums.length < 2) {
+                return { error: '請至少輸入兩個有效數字。' };
+            }
+            return { nums };
+        }
+
+        function applyChartDataFromStats() {
+            const s = currentStats;
+            const n = s.n;
+            const labels = rawData.map((_, i) => '數據' + (i + 1));
+            chartInstance.data.labels = labels;
+            chartInstance.data.datasets[0].data = rawData;
+            chartInstance.data.datasets[1].data = Array(n).fill(s.mean);
+            chartInstance.data.datasets[1].label = '平均值 (\u03BC = ' + formatNum(s.mean) + ')';
+            chartInstance.data.datasets[2].data = Array(n).fill(s.mean + s.stdDev);
+            chartInstance.data.datasets[3].data = Array(n).fill(s.mean - s.stdDev);
+
+            const ys = [...rawData, s.mean, s.mean - s.stdDev, s.mean + s.stdDev];
+            let yMin = Math.min(...ys);
+            let yMax = Math.max(...ys);
+            if (yMin === yMax) {
+                yMin -= 1;
+                yMax += 1;
+            }
+            const pad = (yMax - yMin) * 0.08 || 1;
+            chartInstance.options.scales.y.min = yMin - pad;
+            chartInstance.options.scales.y.max = yMax + pad;
+            chartInstance.options.scales.y.beginAtZero = yMin >= 0 && (yMin - pad) >= 0;
+        }
+
+        function updateConclusionText() {
+            const s = currentStats;
+            document.getElementById('conclusionMeanStd').innerHTML =
+                '這組數據的平均值為 <strong>' + formatNum(s.mean) + '</strong>，標準差為 <strong>' + formatNum(s.stdDev) + '</strong>。';
+            const low = s.mean - s.stdDev;
+            const high = s.mean + s.stdDev;
+            document.getElementById('conclusionRange').innerHTML =
+                '這代表在圖表上，平均值加減一個標準差的範圍約為 <strong>' + formatNum(low) + '</strong> 到 <strong>' + formatNum(high) + '</strong>。在常態分佈經驗法則中，約有 68% 的數據會落在這個藍色區間內。';
+        }
+
+        function applyNewData(newData) {
+            rawData = newData.slice();
+            refreshStatsAndSteps();
+            updateIntroText();
+            applyChartDataFromStats();
+            currentStep = 0;
+            buildIndicators();
+            renderStep();
+        }
+
+        function initApp() {
+            refreshStatsAndSteps();
+            updateIntroText();
+            initChart();
+            applyChartDataFromStats();
+            buildIndicators();
+            renderStep();
+
+            document.getElementById('btnPrev').addEventListener('click', () => {
+                if (currentStep > 0) {
+                    currentStep--;
+                    renderStep();
+                }
+            });
+            document.getElementById('btnNext').addEventListener('click', () => {
+                if (currentStep < stepsData.length - 1) {
+                    currentStep++;
+                    renderStep();
+                }
+            });
+
+            const panel = document.getElementById('manualInputPanel');
+            const ta = document.getElementById('manualDataInput');
+            const err = document.getElementById('manualInputError');
+
+            function openManualPanel() {
+                panel.classList.remove('hidden');
+                ta.value = '';
+                err.classList.add('hidden');
+                err.textContent = '';
+                ta.focus();
+            }
+
+            function closeManualPanel() {
+                panel.classList.add('hidden');
+            }
+
+            document.getElementById('btnManualInput').addEventListener('click', openManualPanel);
+            document.getElementById('btnManualCancel').addEventListener('click', closeManualPanel);
+            document.getElementById('btnManualApply').addEventListener('click', () => {
+                const parsed = parseManualInput(ta.value);
+                if (parsed.error) {
+                    err.textContent = parsed.error;
+                    err.classList.remove('hidden');
+                    return;
+                }
+                err.classList.add('hidden');
+                applyNewData(parsed.nums);
+                closeManualPanel();
+            });
+        }
+
+        function buildIndicators() {
+            const container = document.getElementById('stepIndicators');
+            container.innerHTML = '';
+            for (let i = 0; i < stepsData.length; i++) {
+                const btn = document.createElement('button');
+                btn.className = `px-4 py-2 text-sm font-bold rounded-full border transition-all ${i === currentStep ? 'step-active' : 'step-inactive'}`;
+                btn.innerHTML = i === 0 ? '開始' : `Step ${i}`;
+                btn.onclick = () => {
+                    currentStep = i;
+                    renderStep();
+                };
+                container.appendChild(btn);
+            }
+        }
+
+        function updateIndicators() {
+            const container = document.getElementById('stepIndicators');
+            const buttons = container.children;
+            for (let i = 0; i < buttons.length; i++) {
+                if (i === currentStep) {
+                    buttons[i].className = 'px-4 py-2 text-sm font-bold rounded-full border transition-all step-active scale-105';
+                } else {
+                    buttons[i].className = 'px-4 py-2 text-sm font-bold rounded-full border transition-all step-inactive hover:bg-slate-200';
+                }
+            }
+            
+            document.getElementById('btnPrev').disabled = currentStep === 0;
+            document.getElementById('btnPrev').style.opacity = currentStep === 0 ? '0.5' : '1';
+            
+            document.getElementById('btnNext').disabled = currentStep === stepsData.length - 1;
+            document.getElementById('btnNext').style.opacity = currentStep === stepsData.length - 1 ? '0.5' : '1';
+        }
+
+        function initChart() {
+            const ctx = document.getElementById('mathChart').getContext('2d');
+            const barLabels = rawData.map((_, i) => '數據' + (i + 1));
+
+            chartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: barLabels,
+                    datasets: [
+                        {
+                            label: '原始數據',
+                            data: rawData.slice(),
+                            backgroundColor: 'rgba(99, 102, 241, 0.7)',
+                            borderRadius: 6,
+                            borderWidth: 0,
+                            order: 3
+                        },
+                        {
+                            label: '平均值',
+                            data: [],
+                            type: 'line',
+                            borderColor: '#ef4444',
+                            borderWidth: 3,
+                            borderDash: [5, 5],
+                            pointRadius: 0,
+                            fill: false,
+                            order: 1
+                        },
+                        {
+                            label: '+1 標準差',
+                            data: [],
+                            type: 'line',
+                            borderColor: 'transparent',
+                            pointRadius: 0,
+                            fill: false,
+                            order: 4
+                        },
+                        {
+                            label: '-1 標準差',
+                            data: [],
+                            type: 'line',
+                            borderColor: 'transparent',
+                            backgroundColor: 'rgba(56, 189, 248, 0.15)',
+                            pointRadius: 0,
+                            fill: '-1',
+                            order: 5
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: {
+                        duration: 600
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            grid: {
+                                color: '#f1f5f9'
+                            },
+                            title: {
+                                display: true,
+                                text: '數值大小',
+                                font: {
+                                    weight: 'bold'
+                                }
+                            }
+                        },
+                        x: {
+                            grid: {
+                                display: false
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: {
+                                filter: function(item) {
+                                    return item.text.includes('數據') || item.text.includes('平均值');
+                                }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    if (context.datasetIndex === 0) {
+                                        return '數值: ' + formatNum(context.parsed.y);
+                                    }
+                                    return '';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderStep() {
+            const stepData = stepsData[currentStep];
+            const s = currentStats;
+            const n = rawData.length;
+            const mu = s.mean;
+
+            document.getElementById('stepTitle').innerHTML = stepData.title;
+            document.getElementById('stepDescription').innerHTML = stepData.desc;
+
+            updateIndicators();
+
+            chartInstance.data.datasets[0].backgroundColor = stepData.chartConfig.barColor;
+            chartInstance.data.datasets[1].label = '平均值 (\u03BC = ' + formatNum(mu) + ')';
+
+            if (stepData.chartConfig.showMean) {
+                chartInstance.data.datasets[1].data = Array(n).fill(mu);
+            } else {
+                chartInstance.data.datasets[1].data = [];
+            }
+
+            if (stepData.chartConfig.showDeviations) {
+                chartInstance.options.plugins.tooltip.callbacks.afterLabel = function(context) {
+                    if (context.datasetIndex === 0) {
+                        const val = context.parsed.y;
+                        return '離差: ' + formatNum(val - mu);
+                    }
+                    return '';
+                };
+            } else {
+                chartInstance.options.plugins.tooltip.callbacks.afterLabel = function() { return ''; };
+            }
+
+            if (stepData.chartConfig.showStdDevBand) {
+                chartInstance.data.datasets[2].data = Array(n).fill(mu + s.stdDev);
+                chartInstance.data.datasets[3].data = Array(n).fill(mu - s.stdDev);
+            } else {
+                chartInstance.data.datasets[2].data = [];
+                chartInstance.data.datasets[3].data = [];
+            }
+
+            chartInstance.update();
+
+            renderTable(stepData);
+
+            if (currentStep === 4) {
+                updateConclusionText();
+                document.getElementById('conclusionBox').classList.remove('hidden');
+            } else {
+                document.getElementById('conclusionBox').classList.add('hidden');
+            }
+        }
+
+        function renderTable(stepData) {
+            const thead = document.getElementById('tableHeader');
+            thead.innerHTML = '';
+            stepData.tableCols.forEach(col => {
+                const th = document.createElement('th');
+                th.className = 'py-3 px-4 font-semibold';
+                th.innerHTML = col;
+                thead.appendChild(th);
+            });
+
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+            let sumDev = 0;
+            let sumSq = 0;
+
+            const mu = currentStats.mean;
+
+            rawData.forEach((val) => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-50 transition-colors';
+
+                const td1 = document.createElement('td');
+                td1.className = 'py-2 px-4 font-medium';
+                td1.textContent = formatNum(val);
+                tr.appendChild(td1);
+
+                const dev = val - mu;
+                const sq = dev * dev;
+                sumDev += dev;
+                sumSq += sq;
+
+                if (stepData.tableCols.length > 1) {
+                    const td2 = document.createElement('td');
+                    td2.className = 'py-2 px-4 font-mono ' + (dev < 0 ? 'text-rose-600' : (dev > 0 ? 'text-emerald-600' : 'text-slate-500'));
+                    td2.textContent = dev > 0 ? '+' + formatNum(dev) : formatNum(dev);
+                    tr.appendChild(td2);
+                }
+
+                if (stepData.tableCols.length > 2) {
+                    const td3 = document.createElement('td');
+                    td3.className = 'py-2 px-4 font-mono font-medium text-blue-700';
+                    td3.textContent = formatNum(sq);
+                    tr.appendChild(td3);
+                }
+
+                tbody.appendChild(tr);
+            });
+
+            const tfoot = document.getElementById('tableFoot');
+            tfoot.innerHTML = '';
+            if (stepData.showTotals) {
+                const tr = document.createElement('tr');
+                
+                const td1 = document.createElement('td');
+                td1.className = 'py-3 px-4 uppercase';
+                td1.textContent = '總計';
+                tr.appendChild(td1);
+
+                if (stepData.tableCols.length > 1) {
+                    const td2 = document.createElement('td');
+                    td2.className = 'py-3 px-4 font-mono';
+                    td2.textContent = formatNum(sumDev);
+                    tr.appendChild(td2);
+                }
+
+                if (stepData.tableCols.length > 2) {
+                    const td3 = document.createElement('td');
+                    td3.className = 'py-3 px-4 font-mono text-lg';
+                    td3.textContent = formatNum(sumSq);
+                    tr.appendChild(td3);
+                }
+
+                tfoot.appendChild(tr);
+                tfoot.classList.remove('hidden');
+            } else {
+                tfoot.classList.add('hidden');
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', initApp);
+    </script>
+</body>
+</html>
